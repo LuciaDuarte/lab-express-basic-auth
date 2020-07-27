@@ -5,6 +5,14 @@ const logger = require('morgan');
 const sassMiddleware = require('node-sass-middleware');
 const serveFavicon = require('serve-favicon');
 
+const expressSession = require('express-session');
+const connectMongo = require('connect-mongo');
+const mongoose = require('mongoose');
+
+const mongoStore = connectMongo(expressSession);
+
+const deserializeUser = require('./middleware/deserialize-user');
+const bindUserToResponseLocals = require('./middleware/bind-user-to-response-locals');
 const indexRouter = require('./routes/index');
 
 const app = express();
@@ -17,16 +25,35 @@ app.use(express.static(join(__dirname, 'public')));
 app.use(serveFavicon(join(__dirname, 'public/images', 'favicon.ico')));
 
 app.use(logger('dev'));
-app.use(express.urlencoded({ extended: false }));
+app.use(express.urlencoded({ extended: true }));
 app.use(
   sassMiddleware({
     src: join(__dirname, 'public'),
     dest: join(__dirname, 'public'),
-    outputStyle: process.env.NODE_ENV === 'development' ? 'nested' : 'compressed',
+    outputStyle:
+      process.env.NODE_ENV === 'development' ? 'nested' : 'compressed',
     force: process.env.NODE_ENV === 'development',
     sourceMap: true
   })
 );
+
+app.use(
+  expressSession({
+    secret: 'ABC',
+    resave: true,
+    saveUninitialized: false,
+    cookie: {
+      maxAge: 15 * 24 * 60 * 60 * 1000
+    },
+    store: new mongoStore({
+      mongooseConnection: mongoose.connection,
+      ttl: 60 * 60
+    })
+  })
+);
+
+app.use(deserializeUser);
+app.use(bindUserToResponseLocals);
 
 app.use('/', indexRouter);
 
